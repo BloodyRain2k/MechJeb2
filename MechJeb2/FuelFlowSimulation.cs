@@ -168,7 +168,7 @@ namespace MuMech
             }
 
             //if this isn't the last stage, we're allowed to stage because doing so wouldn't drop anything important
-            if (simStage > 0)
+            if (simStage > 0 && simStage <= Staging.lastStage)
             {
                 //Debug.Log("Allowed to stage because this isn't the last stage");
                 return true;
