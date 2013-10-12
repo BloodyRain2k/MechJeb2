@@ -165,7 +165,23 @@ namespace MuMech
             for (int i = stats.vacStats.Length - 1; i >= 0 && dvLeft > 0; i--)
             {
                 var s = stats.vacStats[i];
-                if (s.deltaV <= 0 || s.startThrust <= 0) continue;
+                if (s.deltaV <= 0) {
+                	var i2 = 1;
+                	if (s.startThrust <= 0) {
+                		continue;
+                	}
+                	else {
+                		// advance through stages looking for dV (hopefully the right one...) but keep the current lower thrust
+                		while (i - i2 > 0 && s.deltaV <= 0) {
+                			s.deltaV = stats.vacStats[i - i2].deltaV;
+                			stats.vacStats[i - i2].deltaV = 0;
+                			i2++;
+                		}
+                		if (s.deltaV <= 0) {
+                			continue;
+                		}
+                	}
+                }
 
                 double stageBurnDv = Math.Min(s.deltaV, dvLeft);
                 dvLeft -= stageBurnDv;
