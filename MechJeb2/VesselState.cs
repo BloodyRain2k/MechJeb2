@@ -503,8 +503,6 @@ namespace MuMech
 
             angularMomentum = new Vector3d(angularVelocity.x * MoI.x, angularVelocity.y * MoI.y, angularVelocity.z * MoI.z);
 
-            maxThrustAccel = thrustAvailable / mass;
-            minThrustAccel = thrustMinimum / mass;
             currentTWR = thrustAvailable / (mass * mainBody.GeeASL * 9.81);
 
             inertiaTensor = new Matrix3x3();
