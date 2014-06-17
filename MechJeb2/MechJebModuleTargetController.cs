@@ -94,6 +94,7 @@ namespace MuMech
 
         public void Unset()
         {
+        	print("target reset - " + StackTraceUtility.ExtractStackTrace());
             Set(null);
         }
 

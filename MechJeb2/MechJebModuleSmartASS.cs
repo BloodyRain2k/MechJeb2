@@ -35,13 +35,15 @@ namespace MuMech
             PARALLEL_PLUS,
             PARALLEL_MINUS,
             ADVANCED,
-            AUTO
+            AUTO,
+            TARGET_HOVER
         }
-        public static Mode[] Target2Mode = { Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.SURFACE, Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.TARGET, Mode.TARGET, Mode.TARGET, Mode.TARGET, Mode.TARGET, Mode.TARGET, Mode.ADVANCED, Mode.AUTO };
+        public static Mode[] Target2Mode = { Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.SURFACE, Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.ORBITAL, Mode.TARGET, Mode.TARGET, Mode.TARGET, Mode.TARGET, Mode.TARGET, Mode.TARGET, Mode.ADVANCED, Mode.AUTO, Mode.TARGET };
         public static string[] ModeTexts = { "OBT", "SURF", "TGT", "ADV", "AUTO" };
-        public static string[] TargetTexts = { "OFF", "KILL\nROT", "NODE", "SURF", "PRO\nGRAD", "RETR\nGRAD", "NML\n+", "NML\n-", "RAD\n+", "RAD\n-", "RVEL\n+", "RVEL\n-", "TGT\n+", "TGT\n-", "PAR\n+", "PAR\n-", "ADV", "AUTO" };
+        public static string[] TargetTexts = { "OFF", "KILL\nROT", "NODE", "SURF", "PRO\nGRAD", "RETR\nGRAD", "NML\n+", "NML\n-", "RAD\n+", "RAD\n-", "RVEL\n+", "RVEL\n-", "TGT\n+", "TGT\n-", "PAR\n+", "PAR\n-", "ADV", "AUTO", "Hover" };
 
         public static GUIStyle btNormal, btActive, btAuto;
+        public float hoverAlt = 50;
 
         [Persistent(pass = (int)Pass.Local)]
         public Mode mode = Mode.ORBITAL;
@@ -77,8 +79,7 @@ namespace MuMech
         {
             if (GUILayout.Button(TargetTexts[(int)bt], (target == bt) ? btActive : btNormal, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                target = bt;
-                Engage();
+                Engage(bt);
             }
         }
 
@@ -163,8 +164,7 @@ namespace MuMech
 
                         if (GUILayout.Button("EXECUTE", GUILayout.ExpandWidth(true)))
                         {
-                            target = Target.SURFACE;
-                            Engage();
+                            Engage(Target.SURFACE);
                         }
                         break;
                     case Mode.TARGET:
@@ -179,6 +179,11 @@ namespace MuMech
                             TargetButton(Target.TARGET_MINUS);
                             TargetButton(Target.RELATIVE_MINUS);
                             TargetButton(Target.PARALLEL_MINUS);
+                            GUILayout.EndHorizontal();
+                            GUILayout.BeginHorizontal();
+                            GUILayout.Label("Alt:");
+                            hoverAlt = float.Parse(GUILayout.TextField(hoverAlt.ToString("F1")));
+                            TargetButton(Target.TARGET_HOVER);
                             GUILayout.EndHorizontal();
 
                             ForceRoll();
@@ -199,8 +204,7 @@ namespace MuMech
 
                         if (GUILayout.Button("EXECUTE", btNormal, GUILayout.ExpandWidth(true)))
                         {
-                            target = Target.ADVANCED;
-                            Engage();
+                            Engage(Target.ADVANCED);
                         }
                         break;
                     case Mode.AUTO:
@@ -213,11 +217,20 @@ namespace MuMech
             base.WindowGUI(windowID);
         }
 
-        public void Engage()
+        public void Engage(Target newTarget)
         {
             Quaternion attitude = new Quaternion();
             Vector3d direction = Vector3d.zero;
             AttitudeReference reference = AttitudeReference.ORBIT;
+        	if (target == Target.TARGET_HOVER && newTarget != Target.TARGET_HOVER) {
+        		hoverAlt = Mathf.Max(hoverAlt, 50);
+        		core.thrust.tmode = MechJebModuleThrustController.TMode.OFF;
+        		core.thrust.trans_kill_h = false;
+        		core.thrust.trans_spd_act = 0;
+        		core.thrust.users.Remove(this);
+        	}
+        	target = newTarget;
+//    		if (!core.target.NormalTargetExists) { target = Target.OFF; } // is this even needed?
             switch (target)
             {
                 case Target.OFF:
@@ -290,20 +303,212 @@ namespace MuMech
                     direction = Vector6.directions[advDirection];
                     reference = advReference;
                     break;
+                case Target.TARGET_HOVER:
+                    core.thrust.tmode = MechJebModuleThrustController.TMode.KEEP_VERTICAL;
+                    core.thrust.users.Add(this);
+                    break;
                 default:
                     return;
             }
 
             if (forceRol && direction != Vector3d.zero)
             {
+<<<<<<< HEAD
                 attitude = Quaternion.LookRotation(direction, Vector3d.up) * Quaternion.AngleAxis(-(float)rol, Vector3d.forward);
                 direction = Vector3d.zero;
-            }
+        }
+        
+		public override void Drive(FlightCtrlState s)
+		{
+			if (target == MechJebModuleSmartASS.Target.TARGET_HOVER)
+			{
+				if (FlightGlobals.fetch.VesselTarget == null)
+				{
+					Engage(Target.OFF);
+//					core.thrust.tmode = MechJebModuleThrustController.TMode.KEEP_VERTICAL;
+//					core.thrust.trans_kill_h = true;
+//					core.thrust.trans_spd_act = 0;
+					return;
+				}
+				
+				hoverAlt += (float)((GameSettings.THROTTLE_DOWN.GetKey() ? -1f : 0f) + (GameSettings.THROTTLE_UP.GetKey() ? 1f : 0f)) * TimeWarp.deltaTime * 2f;
+				
+				var tgtpos = FlightGlobals.fetch.vesselTargetTransform.position;
+				var tgtalt = mainBody.GetAltitude(tgtpos);
+				var tgtdir = Vector3d.Exclude(vesselState.up, (tgtpos - vessel.GetWorldPos3D()));
+				var movedir = Vector3d.Exclude(vesselState.up, vesselState.horizontalSurface).normalized * vesselState.speedSurfaceHorizontal;
+				float dist = (float)tgtdir.magnitude;
+				float myAlt = Mathf.Max((float)Math.Min(vesselState.altitudeTrue, vessel.altitude), 0);
+
+				float vadjust = (float)Math.Min(((hoverAlt - myAlt) - (vesselState.speedVertical) * 3f), 5);
+				
+				float maxTilt = 1f - Mathf.Clamp(1 / (float)(vesselState.currentTWR * 0.90f), 0.05f, 0.95f);
+				float brakepower = (float)(vesselState.maxThrustAccel * (1f - maxTilt) / (vesselState.localg * 9.81));
+				float speed = (float)vesselState.speedSurfaceHorizontal;
+				float speedlimit = Mathf.Min(new float[] { 100f, hoverAlt, (dist / 10f), (dist - (speed * (speed / brakepower))) });
+				
+				//speed: 100m/s
+				//brake force: 250m/s
+				//d=(x^2/f)+x
+				//d=(100^2/250)+100
+				
+				//(spd^2)/(2bf)
+	
+				Vector3 att = Vector3.ClampMagnitude(vesselState.up, 1f - maxTilt) + Vector3.ClampMagnitude((tgtdir.normalized * speedlimit - movedir) / 50f, maxTilt);
+				
+				if (Input.GetKey(KeyCode.F2)) {
+					print("dist: " + dist + "\nmyAlt: " + myAlt + "\nspeed: " + vesselState.speedSurfaceHorizontal.value + "\nspeedlimit: " + speedlimit + "\ncurrentTWR: " + vesselState.currentTWR
+					      + "\nmaxTilt: " + maxTilt + "\ng: " + mainBody.GeeASL);
+				}
+				
+				core.thrust.trans_kill_h = (dist / 10f < vesselState.speedSurfaceHorizontal) || (dist < 5);
+				core.thrust.trans_spd_act = vadjust /* (float)(vadjust > 0 ? Math.Sqrt(mainBody.GeeASL) : 1)*/ ;//* Mathf.Clamp(1f / (float)core.attitude.attitudeError, 0.25f, 1f);
+				
+				if (dist < 5) {
+//					core.thrust.trans_kill_h = true;
+					var rcs = (tgtdir * 2 - movedir * 5) * Mathf.Clamp01(dist * 2);
+					s.X = (s.X != 0 ? s.X : (float)(-Vector3d.Dot(rcs, vessel.transform.right)));
+					s.Y = (s.Y != 0 ? s.Y : (float)(-Vector3d.Dot(rcs, vessel.transform.forward)));
+//					s.Z = (s.Z != 0 ? s.Z : (float)(-Vector3d.Dot(rcs, vessel.transform.up)));
+				}
+				else {
+//					core.thrust.trans_kill_h = false;
+					core.attitude.attitudeTo(att, AttitudeReference.INERTIAL, this);
+				}
+			}
+		}
 
             if (direction != Vector3d.zero)
                 core.attitude.attitudeTo(direction, reference, this);
             else
                 core.attitude.attitudeTo(attitude, reference, this);
+=======
+                case Target.OFF:
+                    core.attitude.attitudeDeactivate();
+                    break;
+                case Target.KILLROT:
+                    core.attitude.attitudeKILLROT = true;
+                    core.attitude.attitudeTo(Quaternion.LookRotation(part.vessel.GetTransform().up, -part.vessel.GetTransform().forward), AttitudeReference.INERTIAL, this);
+                    break;
+                case Target.NODE:
+                    core.attitude.attitudeTo(Vector3d.forward, AttitudeReference.MANEUVER_NODE, this);
+                    break;
+                case Target.SURFACE:
+                    Quaternion r = Quaternion.AngleAxis( (float)srfHdg, Vector3.up)
+                                 * Quaternion.AngleAxis(-(float)srfPit, Vector3.right)
+                                 * Quaternion.AngleAxis(-(float)srfRol, Vector3.forward);
+                    core.attitude.attitudeTo(r, AttitudeReference.SURFACE_NORTH, this);
+                    break;
+                case Target.PROGRADE:
+                    core.attitude.attitudeTo(Vector3d.forward, AttitudeReference.ORBIT, this);
+                    break;
+                case Target.RETROGRADE:
+                    core.attitude.attitudeTo(Vector3d.back, AttitudeReference.ORBIT, this);
+                    break;
+                case Target.NORMAL_PLUS:
+                    core.attitude.attitudeTo(Vector3d.left, AttitudeReference.ORBIT, this);
+                    break;
+                case Target.NORMAL_MINUS:
+                    core.attitude.attitudeTo(Vector3d.right, AttitudeReference.ORBIT, this);
+                    break;
+                case Target.RADIAL_PLUS:
+                    core.attitude.attitudeTo(Vector3d.up, AttitudeReference.ORBIT, this);
+                    break;
+                case Target.RADIAL_MINUS:
+                    core.attitude.attitudeTo(Vector3d.down, AttitudeReference.ORBIT, this);
+                    break;
+                case Target.RELATIVE_PLUS:
+                    core.attitude.attitudeTo(Vector3d.forward, AttitudeReference.RELATIVE_VELOCITY, this);
+                    break;
+                case Target.RELATIVE_MINUS:
+                    core.attitude.attitudeTo(Vector3d.back, AttitudeReference.RELATIVE_VELOCITY, this);
+                    break;
+                case Target.TARGET_PLUS:
+                    core.attitude.attitudeTo(Vector3d.forward, AttitudeReference.TARGET, this);
+                    break;
+                case Target.TARGET_MINUS:
+                    core.attitude.attitudeTo(Vector3d.back, AttitudeReference.TARGET, this);
+                    break;
+                case Target.PARALLEL_PLUS:
+                    core.attitude.attitudeTo(Vector3d.forward, AttitudeReference.TARGET_ORIENTATION, this);
+                    break;
+                case Target.PARALLEL_MINUS:
+                    core.attitude.attitudeTo(Vector3d.back, AttitudeReference.TARGET_ORIENTATION, this);
+                    break;
+                case Target.ADVANCED:
+                    core.attitude.attitudeTo(Vector6.directions[advDirection], advReference, this);
+                    break;
+                case Target.TARGET_HOVER:
+                    core.thrust.tmode = MechJebModuleThrustController.TMode.KEEP_VERTICAL;
+                    core.thrust.users.Add(this);
+                    break;
+            }
+        }
+        
+		public override void Drive(FlightCtrlState s)
+		{
+			if (target == MechJebModuleSmartASS.Target.TARGET_HOVER)
+			{
+				if (FlightGlobals.fetch.VesselTarget == null)
+				{
+					Engage(Target.OFF);
+//					core.thrust.tmode = MechJebModuleThrustController.TMode.KEEP_VERTICAL;
+//					core.thrust.trans_kill_h = true;
+//					core.thrust.trans_spd_act = 0;
+					return;
+				}
+				
+				hoverAlt += (float)((GameSettings.THROTTLE_DOWN.GetKey() ? -1f : 0f) + (GameSettings.THROTTLE_UP.GetKey() ? 1f : 0f)) * TimeWarp.deltaTime * 2f;
+				
+				var tgtpos = FlightGlobals.fetch.vesselTargetTransform.position;
+//				var tgtalt = mainBody.GetAltitude(tgtpos);
+				Vector3d tgtdir = Vector3d.Exclude(vesselState.up, (tgtpos - vessel.GetWorldPos3D()));
+				Vector3d movedir = Vector3d.Exclude(vesselState.up, vesselState.horizontalSurface).normalized * vesselState.speedSurfaceHorizontal;
+				float dist = (float)tgtdir.magnitude;
+				
+				float myAlt = Mathf.Max((float)Math.Min(vesselState.altitudeTrue, vessel.altitude), 0);
+				float vadjust = (float)Math.Min(((hoverAlt - myAlt) - (vesselState.speedVertical) * 3f), 5);
+				
+				float maxTilt = 1f - Mathf.Clamp(1 / (float)(vesselState.currentTWR * 0.80f), 0.05f, 0.95f);
+				float brakepower = (float)(((vesselState.localg / (1f - maxTilt * 0.95f)) - vesselState.localg));
+				float speed = (float)vesselState.speedSurfaceHorizontal;
+				float brakedist = (Mathf.Pow(speed, 2f) / (brakepower * 0.5f)) + speed;
+				float speedlimit = Mathf.Min(new float[] { 100f, hoverAlt, (dist / 10f) });
+				speedlimit = Mathf.Min(speedlimit, (dist < 10 && speed < 5 ? 2f : (dist / brakedist * speedlimit)));
+				//speed: 100m/s
+				//brake force: 250m/s
+				//d=(s^2/f)+s
+				//d=(100^2/250)+100
+				
+				Vector3 att = Vector3.ClampMagnitude(vesselState.up, 1f - maxTilt)
+					+ Vector3.ClampMagnitude((tgtdir.normalized * speedlimit - movedir) / 50f, maxTilt);
+				
+//				if (Input.GetKey(KeyCode.F2)) {
+					print("dist: " + dist + "\nmyAlt: " + myAlt + "\nspeed: " + vesselState.speedSurfaceHorizontal + "\nspeedlimit: " + speedlimit + "\ncurrentTWR: " + vesselState.currentTWR
+					      + "\nmaxTilt: " + maxTilt + "\ng: " + mainBody.GeeASL + " - " + vesselState.localg + "\nbrake: " + brakepower + "\nbrakedist: " + brakedist);
+//				}
+				
+//				core.thrust.trans_kill_h = (dist < brake) || (dist < 5);
+				core.thrust.trans_spd_act = vadjust /* (float)(vadjust > 0 ? Math.Sqrt(mainBody.GeeASL) : 1)*/ ;//* Mathf.Clamp(1f / (float)core.attitude.attitudeError, 0.25f, 1f);
+				
+				if (dist < 3) {
+					core.thrust.trans_kill_h = true;
+					var rcs = (tgtdir * 2 - movedir * 5);
+					s.X = (s.X != 0 ? s.X : (float)(-Vector3d.Dot(rcs, vessel.transform.right)));
+					s.Y = (s.Y != 0 ? s.Y : (float)(-Vector3d.Dot(rcs, vessel.transform.forward)));
+//					s.Z = (s.Z != 0 ? s.Z : (float)(-Vector3d.Dot(rcs, vessel.transform.up)));
+				}
+				else {
+					core.thrust.trans_kill_h = false;
+					core.attitude.attitudeTo(att, AttitudeReference.INERTIAL, this);
+				}
+			}
+		}
+
+        public override GUILayoutOption[] WindowOptions()
+        {
+            return new GUILayoutOption[] { GUILayout.Width(180), GUILayout.Height(100) };
+>>>>>>> 5317507... braking seems to work ok now, thanks to Frement and a lot of try and error
         }
 
         public override GUILayoutOption[] WindowOptions()

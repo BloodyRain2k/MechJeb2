@@ -159,14 +159,14 @@ namespace MuMech
             if (vessel == FlightGlobals.ActiveVessel)
             {
                 FlightInputHandler.state.mainThrottle = 0; //so that the on-screen throttle gauge reflects the autopilot throttle
-            }
+        }
         }
 
         public override void Drive(FlightCtrlState s)
         {
         	if (core.GetComputerModule<MechJebModuleThrustWindow>().hidden && core.GetComputerModule<MechJebModuleAscentGuidance>().hidden) { return; }
         	
-        	if ((tmode != TMode.OFF) && (vesselState.thrustAvailable > 0))
+            if ((tmode != TMode.OFF) && (vesselState.thrustAvailable > 0))
             {
                 double spd = 0;
 
@@ -184,7 +184,9 @@ namespace MuMech
                         if (trans_kill_h)
                         {
                             Vector3 hsdir = Vector3.Exclude(vesselState.up, vessel.srf_velocity);
-                            Vector3 dir = -hsdir + vesselState.up * Math.Max(Math.Abs(spd), 20 * mainBody.GeeASL);
+                            Vector3 dir = -hsdir + vesselState.up * Math.Max(Math.Abs(spd * 2), 20 * Math.Sqrt(mainBody.GeeASL));
+//                            Vector3 dir = -hsdir.normalized * Mathf.Clamp((float)(vesselState.speedSurfaceHorizontal / (core.vesselState.torquePYAvailable * mainBody.GeeASL * 9.81)), 0f, 2f)
+//                            	/* Math.Max((float)surfaceTWR / 3, 1)*/ + vesselState.up; //* Math.Max(Math.Abs(spd), 20 * mainBody.GeeASL);
                             if ((Math.Min(vesselState.altitudeASL, vesselState.altitudeTrue) > 5000) && (hsdir.magnitude > Math.Max(Math.Abs(spd), 100 * mainBody.GeeASL) * 2))
                             {
                                 tmode = TMode.DIRECT;
@@ -193,7 +195,9 @@ namespace MuMech
                             }
                             else
                             {
-                                rot = dir.normalized;
+                            	float maxTilt = 1f - Mathf.Clamp(1 / (float)(vesselState.currentTWR * 0.80f), 0.05f, 0.95f);
+                            	rot = Vector3.ClampMagnitude(vesselState.up, 1f - maxTilt) //* (vesselState.speedSurfaceHorizontal < 2 ? 10 : 1)
+                            		+ Vector3.ClampMagnitude(dir, maxTilt);
                             }
                             core.attitude.attitudeTo(rot, AttitudeReference.INERTIAL, null);
                         }
@@ -221,7 +225,7 @@ namespace MuMech
                     }
                     else
                     {
-                        trans_prev_thrust = targetThrottle = Mathf.Clamp01(trans_prev_thrust + (float)t_act);
+                    	trans_prev_thrust = targetThrottle = Mathf.Clamp01(trans_prev_thrust + (float)t_act);
                     }
                 }
                 else
@@ -240,7 +244,7 @@ namespace MuMech
             // Only set throttle if a module need it. Othewise let the user or other mods set it
             // There is always at least 1 user : the module itself (why ?)
             if (users.Count() > 1)
-                s.mainThrottle = targetThrottle;
+            s.mainThrottle = targetThrottle;
 
             float throttleLimit = 1;
 
@@ -441,8 +445,8 @@ namespace MuMech
 
                     foreach (var sympart in part.symmetryCounterparts) {
                         stack.Push(sympart);
-                    }
                 }
+            }
             }
 
             // For each group in sorted order, if we need more air, open any

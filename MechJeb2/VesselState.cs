@@ -114,6 +114,7 @@ namespace MuMech
         public double minThrustAccel { get { return thrustMinimum / mass; } }
 
         public bool rcsThrust = false;
+        public double currentTWR;
         public float throttleLimit = 1;
         public double limitedMaxThrustAccel { get { return maxThrustAccel * throttleLimit + minThrustAccel * (1 - throttleLimit); } }
         public Vector3d torqueAvailable;
@@ -399,7 +400,7 @@ namespace MuMech
                         //if (rw.wheelState == ModuleReactionWheel.WheelState.Active && !rw.stateString.Contains("Not enough"))
                         if (rw.wheelState == ModuleReactionWheel.WheelState.Active && vessel.HasElectricCharge())
                             torqueAvailable += new Vector3d(rw.PitchTorque, rw.RollTorque, rw.YawTorque);
-                    }
+                        }
                     else if (pm is ModuleEngines)
                     {
                         einfo.AddNewEngine(pm as ModuleEngines);
@@ -415,7 +416,7 @@ namespace MuMech
                     else if (pm is ModuleParachute)
                     {
                         parachutes.Add(pm as ModuleParachute);
-                    }
+                }
                     else if (pm is ModuleControlSurface)
                     {
                         // TODO : Tweakable for ignorePitch / ignoreYaw  / ignoreRoll 
@@ -430,7 +431,7 @@ namespace MuMech
                         Vector3 ctrlTroqueNeg = vessel.GetTransform().InverseTransformDirection(Vector3.Cross(partPosition, cs.getLiftVector(Quaternion.Inverse(airSpeedRot) * airSpeed)));
                         ctrlTorqueAvailable.Add(ctrlTroquePos);
                         ctrlTorqueAvailable.Add(ctrlTroqueNeg);
-                    }
+            }
 
                     if (pm.ClassName == "ModuleEngineConfigs" || pm.ClassName == "ModuleHybridEngine" || pm.ClassName == "ModuleHybridEngines")
                         hasMFE = true;
@@ -501,6 +502,10 @@ namespace MuMech
             }
 
             angularMomentum = new Vector3d(angularVelocity.x * MoI.x, angularVelocity.y * MoI.y, angularVelocity.z * MoI.z);
+
+            maxThrustAccel = thrustAvailable / mass;
+            minThrustAccel = thrustMinimum / mass;
+            currentTWR = thrustAvailable / (mass * mainBody.GeeASL * 9.81);
 
             inertiaTensor = new Matrix3x3();
             foreach (Part p in vessel.parts)

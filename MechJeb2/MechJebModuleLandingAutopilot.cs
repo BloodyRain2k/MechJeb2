@@ -666,7 +666,7 @@ namespace MuMech
 
             double currentError = Vector3d.Distance(core.target.GetPositionTargetPosition(), LandingSite);
 
-            if (currentError < 150)
+            if (currentError < 200)
             {
                 core.thrust.targetThrottle = 0;
                 landStep = LandStep.COAST_TO_DECELERATION;
@@ -719,7 +719,7 @@ namespace MuMech
             }
 
             double currentError = Vector3d.Distance(core.target.GetPositionTargetPosition(), LandingSite);
-            if (currentError > 600)
+            if (currentError > 400)
             {
                 if (!vesselState.parachuteDeployed) // However if there is already a parachute deployed, then do not bother trying to correct the course as we will not have any attitude control anyway.
                 {
