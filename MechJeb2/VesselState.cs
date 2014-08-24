@@ -160,10 +160,12 @@ namespace MuMech
         public List<VesselStatePartExtension> vesselStatePartExtensions = new List<VesselStatePartExtension>();
         public List<VesselStatePartModuleExtension> vesselStatePartModuleExtensions = new List<VesselStatePartModuleExtension>();
         public delegate double DTerminalVelocity();
+        public delegate double DAtmosphericDensity(Vessel vessel);
 
         public VesselState()
         {
             TerminalVelocityCall = TerminalVelocityStockKSP;
+            AtmosphericDensityCall = AtmosphericDensityStockKSP;
         }
 
         static int counter = 0;
@@ -261,9 +263,7 @@ namespace MuMech
                 }
             }
 
-            double atmosphericPressure = FlightGlobals.getStaticPressure(altitudeASL, vessel.mainBody);
-            if (atmosphericPressure < vessel.mainBody.atmosphereMultiplier * 1e-6) atmosphericPressure = 0;
-            atmosphericDensity = FlightGlobals.getAtmDensity(atmosphericPressure);
+            atmosphericDensity = AtmosphericDensityStockKSP(vessel);
             atmosphericDensityGrams = atmosphericDensity * 1000;
 
             orbitApA.value = vessel.orbit.ApA;
@@ -563,6 +563,15 @@ namespace MuMech
 
             double airDensity = FlightGlobals.getAtmDensity(FlightGlobals.getStaticPressure(CoM, mainBody));
             return Math.Sqrt(2 * localg * mass / (massDrag * FlightGlobals.DragMultiplier * airDensity));
+        }
+        
+        public DAtmosphericDensity AtmosphericDensityCall;
+        
+        public double AtmosphericDensityStockKSP(Vessel vessel)
+        {
+            double atmosphericPressure = FlightGlobals.getStaticPressure(altitudeASL, vessel.mainBody);
+            if (atmosphericPressure < vessel.mainBody.atmosphereMultiplier * 1e-6) atmosphericPressure = 0;
+            return FlightGlobals.getAtmDensity(atmosphericPressure);
         }
 
         public double ThrustAccel(double throttle)
